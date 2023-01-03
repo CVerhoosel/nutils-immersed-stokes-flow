@@ -290,32 +290,32 @@ class test(testing.TestCase):
                                          nelems=(12,12), degree=3, maxrefine=2, plotting='none')
 
     # Porosity
-    with self.subTest('porosity'): self.assertAlmostEqual(porosity, 0.6520314578104903, places=10)
+    with self.subTest('porosity'): self.assertAlmostEqual(porosity, 0.6524738603168063, places=10)
 
     # Flux
-    with self.subTest('outflow'): self.assertAlmostEqual(outflow, 0.01617581173359397, places=10)
+    with self.subTest('outflow'): self.assertAlmostEqual(outflow, 0.016250687646720698, places=10)
 
     # Solution vector
     with self.subTest('lhs'):
         self.assertAlmostEqual64(lhs,
-        '''eNodUgtQVFUYtpHEDEMLC/ARD9mFe8/5z112739SfGCJINqqaYwUoek4Kg4+GB8ZOmkCJlkqrihqkcoo
-           osUMZlpDjZmCwu7e175YQcb3EyfzkaM1dqf5Zs78833zfd/855xSb4VyQBvma6LRRIXVvlqI8q2EOv9y
-           +DqtGg6Lp2GLeJU6fV9qleJv3mt0nrvCscdbLi3TjouttNb3GOp9DZDhK4DYwGy4n7oXlos9kCseob+I
-           27UOY6D6lzpJVZUe1qrGqGFpj1InTdejqBWijBvQqJfBViMK8vwvwShhNWSRdnhK7tIb5LJeaBC9QI8M
-           NAfaQhWWrMCc1Lv6Y7KIFBshKNK+h0NaN3XqVWSd72eySHxEC2kdREAN3KLvkffJ29bBgtdSYhmRNKuz
-           ylIXPEKGGPuhWIthEVoRSNp4Uq2npWn+1cJT4Tb5kTbBHBjEkqAYFpJ80hwfdSHuQnHijqRqstm6AEb4
-           bOyRlsTmarvJJKOP0Ul7+drILuO8/mogzr8SbtON7CqVWK1YQz8M7U1+PTmlK7OrhA6yRrDJ/g2st7EL
-           Io1j2m46Tdkq2dSB0holQbmpGOpSMUY4weKpi/0qDICBnZld33RFDn+WvI9u6mBsSbiS5QX7Qu+UW8o2
-           YaanAha0l8mN7u3e8d6PtSX6ofBx1pLWzJTUEVCf+jyx4ZIn/CRcSneE+rBTQg3rTz+HxSRJ3aw5PSc9
-           je4m9zl3vH2O1yVl+DRrO4s0jrAC/1B4Zp3YLSZ9a1llCYkTA9HwAZnPzoCLRbB/jC1Go5KnNCkuZafS
-           KR1VS1kRxOk3WYYWyyRjMW1M3ZBQ2VkbdAXvd/QIAeEiKYd+LMhusFi2lC0TcsRHwRSrJfiuUEm7tUY2
-           Tv2MrVfnU5seKUz1K12nUg6K58UWI0O/ooK6TJ+sP4CHUM3WsTLwgI/8Yf6lGfq/EFDXs61qP3pWz9da
-           oVCfQsdbugLltixbjaJ5jnuuu1XvPW9tSmlQZI/Nt5hNm2GxEIImYwIbrn8BJfpgrQGKvCdtE7zR6bPo
-           Rb2qrakt1/uREqdXByLZVfET9rd4CRYIb7AlvrWsw6inbqOvKkC+p8g2pd0p9/fesZ3Tiv3J7CdjDdPI
-           U3giJLIDxiq21tcXviMVil0nnv1aGzp4AZ/N8/hkE3m8kE/nQ/jvmIBuBD7NZKbwbJ7DnXwGn8QT+QWs
-           w5dxIfoxgY81+RxTzf7/HMst/AV+HQ/iCQxjH27lo3kun2oi19Qk0xvPY3k3hkzvHXyF28y8fD7TbEU+
-           lA/gcXw4v2JqZ9GL9zCWjzEbZ/BM/iZ/jvexF4/mp83kBvwBz+B1jOZ2PpIP4vdQNR2KmVpuogIr8Svc
-           hi68hpexEXea8xbchBtwDDpxroks7IcN8lB5nHxajsVsnIZvmbtGI8FclPGanCNzx4P0AvsuR4l8V47B
-           h7Iqi6Y705xmytmOFek2tk8aaT/kWCl3mmiRj5kdo3GjvNbxor1eWp8GELQdtgccdXIvHIZl5m0KeNQR
-           ac+y3WEL2U7mksam/2mfJzuxBVH+1D7K9o7Jh9kK1gQuSbQTuRiT0yvZayQZCLtCVxhV0Jre4/gP50we
-           yg==''')
+         '''eNodUglMVFcUVesGVLRQ1yDgoAP+/999s/37lErFLoIoqIFKUdoqialIoLEViailRkGsjtqWilpRCy5o
+            CooLxHSJWpQqzN9nGEdAbcWVInaJNpLan+YkNzf35JyTe3PXSGXyITXSOEdGCRoUGtUQZKyFg9414J66
+            B47zzfAlf4+kGuWqm2+SPOSTthJXpeS2FahN/FWy33gGNUYdTDM+gHBfDvTEHYAivhfm8CfJJX6nKulh
+            yhNlvqLJvbRFCVZu2b6VD9kWamGEh2H6A6jTtsB2PRTSvS9DAlcMswUP9As95L7Qo32oO7Rl2l/eY74W
+            /+fWZF9m3F3tuVAiLNb9kKuegsPqbZKq7RE2GN8LK/lnZCk5AkNgHzwkS4RsYXjsq1yXdaM11ZLZ4bbW
+            tjcI4/RqyFfH0EFqHlA1VfhKi5wqebdzA/iHwjlyFnJgDI2BAlguvCcERfcHQm5kTqqy7BVKY1fCdMNF
+            /1AtNEetE6brA/VOMtCQhO36ZW2Wz+ldB49JOe0mDlrD7yUL/PUxfAx0JnauJiGxw2iyt5QO0vfDYP2M
+            up8skrfZYpQw2zo5Wn4k+5QiPpQ7TyPJbvoDFw75HbSzvPOlyf/EHCbu63aaFdhBM9uDoHryPbmKe8ez
+            GYpb14sNbXulN6VsNU+TA430l6k/US0uHmrjRlj6bkuB54H1ZKc/mLZw++gIsgWKhCilTE3znPfUtzW2
+            edrCncukStsMozXWQ4fodXSJNxKexCbc5C0HrIXWLj7dNwqyhFx6BSroYGoxavUGebFcL++SK+QuW6Py
+            MS2AsdoDGq9OoFT/iJyKK4ve1lHVXtF+9XoPd5/rFsogmPrpPRpBV9MCbhb/tD0xVmify7lJh3qKJiqf
+            0Y3KCmLXwrgUr9p5acpx/hp/SZ+mdSm8sl7L1J7CM/ialtByUMAn/Gz+Urr2L/iUjXSX8gr5UctWmyFL
+            yyDzrNd9W+1J9h2yx3PG092mS4+l0ikr2oH2EztdSi7AGi4Ap/VkatG2wiotSj0GeVKjPUka4YggEfru
+            a2evzZYy5Alagy+IdvPFtJ+/A3nceJpvlFC//h1p0YcoNljsybUvbE0Vh0u/26+oy7xW2qR/Sg2hH/q5
+            GFqtr6XrjBA4JGySXZrVI6tX0cWy2VK2iM0zsYi9z9JZBLuAUdiKwBaak/ksiSWzNJbB5rJJ7AbWYAjm
+            ohej2UxznmyySf/XmczKBrK7eBSbMIBDWSxLYClsgYkUk7OZ2glsHLuJflP7CEOZ3fTLYu+aqcgmslFs
+            PJvCfjO5yyhhL45jr5uJGSyRRbEX+AQHsJHsoul8AuuxGe/iSOZk8Ww060XFVMim62YsxTLcim7chRXY
+            jb/iSazEL3AHluMmTMA0zDHxNgbjCTFSnCVeFMdiEi5AZu4aijzOQRfeEZPEaa6/HdnOStcq8ZEYjn+K
+            ssiZ6plmlykmuYocCfSILd551FUo3jDRLJ42M2ZgmbjBNdRZZxvNvQZ+e63T66oRX4gTcbN5TQ7rXEHO
+            OfY+mk+/oXtsbzj6nMvFNLyC8WKJ8y17Cl1JA7SQNsE+GziJWIAORxWNECIgjt4ixfpBaHX0uf4Dxi4f
+            gA==''')
