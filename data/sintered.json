@@ -1,8 +1,0 @@
-{
-  "spacing": [0.025,0.025,0.025], 
-  "dtype": "u2", 
-  "order": "F",
-  "fname": "sintered.raw", 
-  "shape": [200,100,100], 
-  "porosity" : 0.28
-}
