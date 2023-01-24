@@ -213,17 +213,16 @@ def get_levelset(lengths, data, ambient_domain, geom, degree, pp):
     # (approximately) matching the voxel grid.
     nref = min(numpy.floor(numpy.log2(sh/ne)).astype(int) for sh, ne in zip(data.shape,ambient_domain.shape))
     levelset_domain  = ambient_domain.refine(nref)
-    levelset_spacing = numpy.array([l/sh for sh, l in zip(levelset_domain.shape, lengths)])
+    voxel_spacing    = numpy.array([l/sh for sh, l in zip(data.shape, lengths)])
 
-    treelog.user(f'levelset shape  : {"×".join(str(d) for d in levelset_domain.shape)}')
-    treelog.user(f'levelset spacing: {"×".join(str(d) for d in levelset_spacing)}')
+    treelog.user(f'levelset shape: {"×".join(str(d) for d in levelset_domain.shape)}')
 
     # Sample the levelset domain
     levelset_sample = levelset_domain.sample('uniform', 2)
     levelset_points = levelset_sample.eval(geom)
 
     # Find the voxel data values corresponding to the levelset points
-    indf = levelset_points/levelset_spacing
+    indf = levelset_points/voxel_spacing
     indi = numpy.maximum(numpy.minimum(numpy.floor(indf),numpy.array(data.shape)-1),0).astype(int)
     levelset_data = data[tuple(indi.T)]
 
@@ -290,32 +289,32 @@ class test(testing.TestCase):
                                          nelems=(12,12), degree=3, maxrefine=2, plotting='none')
 
     # Porosity
-    with self.subTest('porosity'): self.assertAlmostEqual(porosity, 0.6524738603168063, places=10)
+    with self.subTest('porosity'): self.assertAlmostEqual(porosity, 0.6525449951489766, places=10)
 
     # Flux
-    with self.subTest('outflow'): self.assertAlmostEqual(outflow, 0.016250687646720698, places=10)
+    with self.subTest('outflow'): self.assertAlmostEqual(outflow, 0.017426167453811245, places=10)
 
     # Solution vector
     with self.subTest('lhs'):
         self.assertAlmostEqual64(lhs,
-         '''eNodUglMVFcUVesGVLRQ1yDgoAP+/999s/37lErFLoIoqIFKUdoqialIoLEViailRkGsjtqWilpRCy5o
-            CooLxHSJWpQqzN9nGEdAbcWVInaJNpLan+YkNzf35JyTe3PXSGXyITXSOEdGCRoUGtUQZKyFg9414J66
-            B47zzfAlf4+kGuWqm2+SPOSTthJXpeS2FahN/FWy33gGNUYdTDM+gHBfDvTEHYAivhfm8CfJJX6nKulh
-            yhNlvqLJvbRFCVZu2b6VD9kWamGEh2H6A6jTtsB2PRTSvS9DAlcMswUP9As95L7Qo32oO7Rl2l/eY74W
-            /+fWZF9m3F3tuVAiLNb9kKuegsPqbZKq7RE2GN8LK/lnZCk5AkNgHzwkS4RsYXjsq1yXdaM11ZLZ4bbW
-            tjcI4/RqyFfH0EFqHlA1VfhKi5wqebdzA/iHwjlyFnJgDI2BAlguvCcERfcHQm5kTqqy7BVKY1fCdMNF
-            /1AtNEetE6brA/VOMtCQhO36ZW2Wz+ldB49JOe0mDlrD7yUL/PUxfAx0JnauJiGxw2iyt5QO0vfDYP2M
-            up8skrfZYpQw2zo5Wn4k+5QiPpQ7TyPJbvoDFw75HbSzvPOlyf/EHCbu63aaFdhBM9uDoHryPbmKe8ez
-            GYpb14sNbXulN6VsNU+TA430l6k/US0uHmrjRlj6bkuB54H1ZKc/mLZw++gIsgWKhCilTE3znPfUtzW2
-            edrCncukStsMozXWQ4fodXSJNxKexCbc5C0HrIXWLj7dNwqyhFx6BSroYGoxavUGebFcL++SK+QuW6Py
-            MS2AsdoDGq9OoFT/iJyKK4ve1lHVXtF+9XoPd5/rFsogmPrpPRpBV9MCbhb/tD0xVmify7lJh3qKJiqf
-            0Y3KCmLXwrgUr9p5acpx/hp/SZ+mdSm8sl7L1J7CM/ialtByUMAn/Gz+Urr2L/iUjXSX8gr5UctWmyFL
-            yyDzrNd9W+1J9h2yx3PG092mS4+l0ikr2oH2EztdSi7AGi4Ap/VkatG2wiotSj0GeVKjPUka4YggEfru
-            a2evzZYy5Alagy+IdvPFtJ+/A3nceJpvlFC//h1p0YcoNljsybUvbE0Vh0u/26+oy7xW2qR/Sg2hH/q5
-            GFqtr6XrjBA4JGySXZrVI6tX0cWy2VK2iM0zsYi9z9JZBLuAUdiKwBaak/ksiSWzNJbB5rJJ7AbWYAjm
-            ohej2UxznmyySf/XmczKBrK7eBSbMIBDWSxLYClsgYkUk7OZ2glsHLuJflP7CEOZ3fTLYu+aqcgmslFs
-            PJvCfjO5yyhhL45jr5uJGSyRRbEX+AQHsJHsoul8AuuxGe/iSOZk8Ww060XFVMim62YsxTLcim7chRXY
-            jb/iSazEL3AHluMmTMA0zDHxNgbjCTFSnCVeFMdiEi5AZu4aijzOQRfeEZPEaa6/HdnOStcq8ZEYjn+K
-            ssiZ6plmlykmuYocCfSILd551FUo3jDRLJ42M2ZgmbjBNdRZZxvNvQZ+e63T66oRX4gTcbN5TQ7rXEHO
-            OfY+mk+/oXtsbzj6nMvFNLyC8WKJ8y17Cl1JA7SQNsE+GziJWIAORxWNECIgjt4ixfpBaHX0uf4Dxi4f
-            gA==''')
+            '''eNoVUgtMFGcQxhYMVWp9IGpbTU/vcLnd/587bnd+QC0Ui4hSPIKo+KhUU4tixWdaLSoCQQ1VmgY1ausD
+            VFIbW4mpIq2pUYkCd3u7e3svOJHQKmp9VQ2WWNpuM5lJZr755stM5pF8WV6jPeFm0kP8c2rSz9JS/Tjt
+            7TpDZxt5vfCYpnGfCfV6jBJDpsr1mu6WHdWy31asmUOzaZ8eB2X6SfqzXkojOg/SdD4K+vgxcJuv4ges
+            RUqK9pqn18PDd75umq/GKZotT3kOD7QioY7WaN1U18rpY28cnR9cTut4P40mo6CSDCf5wnA1Q7Xoj7RD
+            CRUJYuB77s/xxAdeEC6RNK2HFqq/0G/VGrJTqxBO+/PIPaGWDqVjoYbOp8Poq8Ju4UUwyvpD6NOOV+K7
+            Qk3c+fitpFW7QdepU+Gp8g8pUpOEbG8mtyQ4RLAI14mTJkELFWANjadbhFb+Rsc2c+2kQeFW80gSYz5K
+            N+sr4IHaR4+qbwvHfBcM9Z3eeutd9bhqEloSIiGNHgaZxEI1/zlZEJx1c9DNdNOb4SOkyjIZJvj2QZZ3
+            GvV7NylraIrnPOyST5CpnovKR0qzOo8O8BqcEVbCXGsvaQjHjs+dSE2p5kayOJAGu7kTMNuaTUKTd3ii
+            fU0upzpRJuSI60PI8XD8FnI70A0NvnKoCD4m17gCU2U4I9zVsZFsCv1B4/hz0EPq6VLywFOhlMszPNvc
+            1cIy+Tfbr54DoNBK7SEM1QCa9XMkd3JNeI95oaUkvt1a5XeRYrIabHAMVsEVYTW/X5mnFKn7ubVKO9wR
+            ivU22KqchkbFTLdrJfxTLmSGDmdQDMzzZ/Ix+jf+frKbuqEDzPA17CJfkqPWAx2nSLaWBU5lAF561tEx
+            ao8+w3/W16uPDb3B7ReayH3vAqXaE5bT1XfUVXQGXQuRcIcuouW0KjgYStU6aFPCdIF6Uc2nX3gm2Z9x
+            r0MKv93b4jrVttz9u+uZsd90vV8fBV+REvhY2AGRwb2Q6S0Am+b2O7le+YptozvK4XTtk4rak1xuOU3p
+            0xTrc3o8oRFSrRtgfPAKHNTTYJw/WT+rN8q1ENs+RSyRu+x7tGG6CCu9DXDduhMWB36CLOMfevirXp60
+            ygVyAKewJYY5WSbLZgWs0Ih/4Sc4BYPoYLksj81i7xtYLstn01kEq0EBJ2Ip3sJJLNWozzT8/5jBRBbN
+            ZDyJF/CqgUYzjqWxHDbXYGYyiU1gg9nf2I+92Ik63sfhRn8OW2hMfY+ZDawfI9lIdgsVvIxt+BDHsGSW
+            ZSgmGNg97MYn+C824mmswwZsxgC+MCZEsYfow2t4yfB2LMYNuBW34SZcgYuwEFcb2V48gLW4C8vQgu/i
+            QpyD4/CilCR5xFmSIgEuM1hzEHEwxmMqjsDDkle87qCOTsdd8Yxkwg9QxFhMwXRj6ybpkdjsGJX4xGZJ
+            bHcMiC1SssGdia2GwmjkpQixLLHM1kZ32KoSh4hJksW4RSe+xdqkDPFCImf3AsARiLD/mJgn9kgiSxfX
+            OzS7yTYaDtEcWgi19s2OzeIIx3r7UkgmHH/HN428tMU4/gNEABTe'''
+         )
