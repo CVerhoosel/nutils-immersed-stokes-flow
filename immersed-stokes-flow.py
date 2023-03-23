@@ -108,6 +108,7 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
 
         # Namespace initialization
         ns = Namespace()
+        ns.δ = function.eye(domain.ndims)
         ns.x = geom
         ns.define_for('x', gradient='∇', normal='n', jacobians=('dV', 'dS'))
 
@@ -128,17 +129,19 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
         # Velocity and pressure fields
         ns.u = function.dotarg('u', ns.ubasis)
         ns.p = function.dotarg('p', ns.pbasis)
+        ns.σ_ij = 'μ (∇_j(u_i) + ∇_i(u_j)) - δ_ij p'
 
         ns.dnΔu = dnΔ(ns.u, ns.x, 'n_i h' @ ns, count=degree)
         ns.dnΔp = dnΔ(ns.p, ns.x, 'n_i h' @ ns, count=degree)
 
         # Residual volume terms
-        resu = domain.integral('(μ ∇_j(ubasis_ni) (∇_j(u_i) + ∇_i(u_j)) - ∇_k(ubasis_nk) p) dV' @ ns, degree=2*degree)
+        resu = domain.integral('∇_j(ubasis_ni) σ_ij dV' @ ns, degree=2*degree)
         resp = domain.integral('-∇_k(u_k) pbasis_n dV' @ ns, degree=2*degree)
 
         # Dirichlet boundary terms
         dirichlet_boundary = domain.boundary['trimmed,top,bottom' if domain.ndims==2 else 'trimmed,top,bottom,front,back']
-        resu += dirichlet_boundary.integral('(-μ ((∇_j(u_i) + ∇_i(u_j)) n_i ubasis_nj + (∇_j(ubasis_ni) + ∇_i(ubasis_nj)) n_i u_j) + μ (β / h) ubasis_ni u_i + p ubasis_ni n_i) dS' @ ns, degree=2*degree)
+        resu += dirichlet_boundary.integral('-σ_ij n_i ubasis_nj dS' @ ns, degree=2*degree)
+        resu += dirichlet_boundary.integral('-μ ((∇_j(ubasis_ni) + ∇_i(ubasis_nj)) n_j - (β / h) ubasis_ni) u_i dS' @ ns, degree=2*degree)
         resp += dirichlet_boundary.integral('pbasis_n u_i n_i dS' @ ns, degree=2*degree)
 
         # Inflow boundary term
