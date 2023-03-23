@@ -23,6 +23,7 @@
 # the ghost mesh.
 
 from nutils import cli, mesh, function, topology, solver, elementseq, transformseq, testing
+from nutils.expression_v2 import Namespace
 from typing import Tuple
 import numpy, treelog, numpy.linalg, itertools
 import postprocessing
@@ -106,8 +107,10 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
     with treelog.context('immersed iga solver'):
 
         # Namespace initialization
-        ns = function.Namespace()
-        ns.x    = geom
+        ns = Namespace()
+        ns.x = geom
+        ns.define_for('x', gradient='∇', normal='n', jacobians=('dV', 'dS'))
+
         ns.μ    = mu
         ns.h    = numpy.linalg.norm(numpy.array(L)/numpy.array(nelems))
         ns.β    = beta
@@ -123,46 +126,46 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
         ns.dnΔpbasis = dnΔ(ns.pbasis, ns.x, 'n_i h' @ ns, count=degree)
 
         # Velocity and pressure fields
-        ns.u_i = 'ubasis_ni ?lhsu_n'
-        ns.p   = 'pbasis_n ?lhsp_n'
+        ns.u = function.dotarg('u', ns.ubasis)
+        ns.p = function.dotarg('p', ns.pbasis)
 
         ns.dnΔu = dnΔ(ns.u, ns.x, 'n_i h' @ ns, count=degree)
         ns.dnΔp = dnΔ(ns.p, ns.x, 'n_i h' @ ns, count=degree)
 
         # Residual volume terms
-        resu = domain.integral('(μ ubasis_ni,j (u_i,j + u_j,i) - ubasis_nk,k p) d:x'@ns, degree=2*degree)
-        resp = domain.integral('-u_k,k pbasis_n d:x'@ns, degree=2*degree)
+        resu = domain.integral('(μ ∇_j(ubasis_ni) (∇_j(u_i) + ∇_i(u_j)) - ∇_k(ubasis_nk) p) dV' @ ns, degree=2*degree)
+        resp = domain.integral('-∇_k(u_k) pbasis_n dV' @ ns, degree=2*degree)
 
         # Dirichlet boundary terms
         dirichlet_boundary = domain.boundary['trimmed,top,bottom' if domain.ndims==2 else 'trimmed,top,bottom,front,back']
-        resu += dirichlet_boundary.integral('(-μ ((u_i,j + u_j,i) n_i ubasis_nj + (ubasis_ni,j + ubasis_nj,i) n_i u_j) + μ (β / h) ubasis_ni u_i + p ubasis_ni n_i) d:x'@ns, degree=2*degree)
-        resp += dirichlet_boundary.integral('pbasis_n u_i n_i d:x'@ns, degree=2*degree)
+        resu += dirichlet_boundary.integral('(-μ ((∇_j(u_i) + ∇_i(u_j)) n_i ubasis_nj + (∇_j(ubasis_ni) + ∇_i(ubasis_nj)) n_i u_j) + μ (β / h) ubasis_ni u_i + p ubasis_ni n_i) dS' @ ns, degree=2*degree)
+        resp += dirichlet_boundary.integral('pbasis_n u_i n_i dS' @ ns, degree=2*degree)
 
         # Inflow boundary term
-        resu += domain.boundary['left'].integral('pbar n_i ubasis_ni d:x'@ns, degree=2*degree)
+        resu += domain.boundary['left'].integral('pbar n_i ubasis_ni dS' @ ns, degree=2*degree)
 
         # Skeleton stabilization term
-        resp += skeleton_mesh.integral(f'-γs h dnΔpbasis_n dnΔp d:x' @ ns, degree=2*degree)
+        resp += skeleton_mesh.integral(f'-γs h dnΔpbasis_n dnΔp dS' @ ns, degree=2*degree)
 
         # Ghost stabilization term
-        resu += ghost_mesh.integral('(γg / h) dnΔubasis_ni dnΔu_i d:x' @ ns, degree=2*degree)
+        resu += ghost_mesh.integral('(γg / h) dnΔubasis_ni dnΔu_i dS' @ ns, degree=2*degree)
 
         # Solve the linear system
-        sol = solver.solve_linear(('lhsu', 'lhsp'), (resu, resp))
+        sol = solver.solve_linear(('u', 'p'), (resu, resp))
 
     # Post-processing of results
     with treelog.context('post-processing'):
         pp.solution(domain, ns, sol)
 
     # Compute the averaged in- and outflow
-    Ain , Qin , pin  = domain.boundary['left'] .integrate(['d:x', '-u_i n_i d:x', 'p d:x']@ns, degree=degree, arguments=sol)
-    Aout, Qout, pout = domain.boundary['right'].integrate(['d:x', 'u_i n_i d:x' , 'p d:x']@ns, degree=degree+1, arguments=sol)
+    Ain , Qin , pin  = domain.boundary['left'] .integrate(['dS', '-u_i n_i dS', 'p dS']@ns, degree=degree, arguments=sol)
+    Aout, Qout, pout = domain.boundary['right'].integrate(['dS', 'u_i n_i dS' , 'p dS']@ns, degree=degree+1, arguments=sol)
     treelog.user(f'(in/out)flow area    : {Ain} / {Aout}')
     treelog.user(f'(in/out)flow pressure: {pin/Ain} / {pout/Aout}')
     treelog.user(f'(in/out)flow flux    : {Qin} / {Qout}')
     treelog.user(f'(in/out)flow velocity: {Qin/Ain} / {Qout/Aout}')
 
-    return domain_porosity, numpy.concatenate([sol['lhsu'],sol['lhsp']]), Qout
+    return domain_porosity, numpy.concatenate([sol['u'],sol['p']]), Qout
 
 def get_levelset(L, R, geom, seed):
 
