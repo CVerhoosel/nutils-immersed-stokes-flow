@@ -119,15 +119,15 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
         ns.ubasis = domain.basis('spline', degree=degree).vector(domain.ndims)
         ns.pbasis = domain.basis('spline', degree=degree)
 
-        ns.Δubasis = function.jump(ns.ubasis)
-        ns.Δpbasis = function.jump(ns.pbasis)
+        ns.dnΔubasis = dnΔ(ns.ubasis, ns.x, 'n_i h' @ ns, count=degree)
+        ns.dnΔpbasis = dnΔ(ns.pbasis, ns.x, 'n_i h' @ ns, count=degree)
 
         # Velocity and pressure fields
         ns.u_i = 'ubasis_ni ?lhsu_n'
         ns.p   = 'pbasis_n ?lhsp_n'
 
-        ns.Δu_i = 'Δubasis_ni ?lhsu_n'
-        ns.Δp   = 'Δpbasis_n ?lhsp_n'
+        ns.dnΔu = dnΔ(ns.u, ns.x, 'n_i h' @ ns, count=degree)
+        ns.dnΔp = dnΔ(ns.p, ns.x, 'n_i h' @ ns, count=degree)
 
         # Residual volume terms
         resu = domain.integral('(μ ubasis_ni,j (u_i,j + u_j,i) - ubasis_nk,k p) d:x'@ns, degree=2*degree)
@@ -142,12 +142,10 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
         resu += domain.boundary['left'].integral('pbar n_i ubasis_ni d:x'@ns, degree=2*degree)
 
         # Skeleton stabilization term
-        from string import ascii_lowercase as alphabet
-        dn = lambda function, start, stop: f'{function},{alphabet[start:stop]} {" ".join([f"n_{index}" for index in alphabet[start:stop]])}'
-        resp += skeleton_mesh.integral((f'-γs h^{2*degree+1} {dn("Δpbasis_n", 0, degree)} {dn("Δp_", degree, 2*degree)} d:x')@ns, degree=2*degree)
+        resp += skeleton_mesh.integral(f'-γs h dnΔpbasis_n dnΔp d:x' @ ns, degree=2*degree)
 
         # Ghost stabilization term
-        resu += ghost_mesh.integral((f'γg h^{2*degree-1} {dn("Δubasis_ni", 0, degree)} {dn("Δu_i", degree, 2*degree)} d:x')@ns, degree=2*degree)
+        resu += ghost_mesh.integral('(γg / h) dnΔubasis_ni dnΔu_i d:x' @ ns, degree=2*degree)
 
         # Solve the linear system
         sol = solver.solve_linear(('lhsu', 'lhsp'), (resu, resp))
@@ -216,6 +214,15 @@ def construct_meshes(ambient_domain, domain):
     ghost_mesh = topology.TransformChainsTopology('X', ghost_references, ghost_transforms, ghost_opposites)
 
     return background_mesh, skeleton_mesh, ghost_mesh
+
+def dnΔ(f, x, n, count=1):
+    'construct the count-times normal gradient of the jump of f'
+    f = function.jump(f)
+    for i in range(count):
+        f = function.grad(f, x)
+    for i in range(count):
+        f @= n
+    return f
 
 if __name__ == '__main__':
     cli.run(stokes_flow)
