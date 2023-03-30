@@ -1,8 +1,8 @@
 # Post-processing class accompanying `immersed-stokes-flow.py`
 
 from nutils import export
-import numpy, itertools
-from matplotlib import collections, patches, colors, colormaps, cm
+import numpy
+from matplotlib import collections, colors
 
 # Initialize the post-processor
 def initialize(plotting, ndims, *args):

@@ -22,7 +22,7 @@
 # background mesh, and a ghost-stabilization term for the velocity acting on
 # the ghost mesh.
 
-from nutils import cli, mesh, function, topology, solver, elementseq, transformseq, testing
+from nutils import cli, mesh, function, solver, testing
 from nutils.expression_v2 import Namespace
 from typing import Tuple
 import numpy, treelog, numpy.linalg, itertools
