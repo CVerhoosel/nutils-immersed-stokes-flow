@@ -177,7 +177,7 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
     treelog.user(f'(in/out)flow flux    : {Qin} / {Qout}')
     treelog.user(f'(in/out)flow velocity: {Qin/Ain} / {Qout/Aout}')
 
-    return domain_porosity, numpy.concatenate([sol['u'],sol['p']]), Qout
+    return domain_porosity, sol, Qout
 
 def get_levelset(L, R, geom, seed):
 
@@ -213,37 +213,38 @@ if __name__ == '__main__':
 # Unit testing
 class test(testing.TestCase):
 
-  def test_2D(self):
-    porosity, lhs, outflow = stokes_flow(L=(2.5,2.5), R=(0.4,0.7), mu=1., beta=100.,
-                                         gammaskeleton=0.05, gammaghost=0.0005, pbar=1.,
-                                         nelems=(12,12), degree=3, maxrefine=2, seed=123456, plotting='none')
+    def test_2D(self):
+        porosity, sol, outflow = stokes_flow(L=(2.5,2.5), R=(0.4,0.7), mu=1.,
+            beta=100., gammaskeleton=0.05, gammaghost=0.0005, pbar=1.,
+            nelems=(12,12), degree=3, maxrefine=2, seed=123456, plotting='none')
 
-    # Porosity
-    with self.subTest('porosity'): self.assertAlmostEqual(porosity, 0.6540391378932529, places=10)
+        with self.subTest('porosity'):
+            self.assertAlmostEqual(porosity, 0.65403913789, places=10)
 
-    # Flux
-    with self.subTest('outflow'): self.assertAlmostEqual(outflow, 0.01748244952959246, places=10)
+        with self.subTest('outflow'):
+            self.assertAlmostEqual(outflow, 0.01748244953, places=10)
 
-    # Solution vector
-    with self.subTest('lhs'):
-        self.assertAlmostEqual64(lhs,
-         '''eNoNkntQVHUUx9NRNCbHtEQly8fy2N17f79zd+/e80PR1DJREETEFBEfiaZjTIaNWoBa1uD7RSmOzqAB
-            M2qCkGiNSI7omOnufe8LXPJRQ5JPfJAOafev853zOd8zZ845R+S/5VR9X3wqPc09o6+bJ2mxeYTWjKil
-            GdxzeoHvpPbEOfwYv6Kk8Nd9yepy79ee8/JeIUEnjmy6xxwM+8x6etzcQi9fq6JpXDT05YdCD17gxnB2
-            9aC2WMlUu53p2g26WtuqlgsBJU/YYRzmdtIT+gN6Qd9Iu4x4Oiq0jF7k/qC9yCCoICYfzW/WjmmqjnqK
-            w+0oDcbZvwpsDLQY73Ml5HO9i07Tqmm1dpBs1hfwkUA2ifCldADtA1vodjqFzuZ4fnbCDmdBy4LWdfH7
-            W3Y7boenk8f6TZqj2eClytEsrZmbZ3Q6eofWcK/xd0keHQlnKYHZ1EXL+Ebu43ChbcioymsPbD1JUWIt
-            TTfz4Kk2ADZpic6zgan6F/QV4yfn93qH9qrzpn0IpNJyCJLBsIj7ktwL7mib0XZ3xLBIBRmUkAhZ/oMg
-            Gcn0oVGv2ulWeaZrpbKKHJf/lQ+oz7U59BFnwlG+ALKdt0hhuGbouRFseK7tFCkMTYBJ9kMQcvxM2u1L
-            lb3mS+8mtd3bCklKDddG6gJtsDqwHpJCT8hAe83wFZHTke7WpeRS8AnN505AMzlMGeHUa+p2348+1fcR
-            v8xX6O5WxoJC6/UOsOkIm8xKstwe15Zm88Qtih/H3Q+eIQ6yDJKgEVZDLrfSOUjbqQ7T+jnuqHughCvz
-            t0OBWgk1agyt089wNxN22fJbs8L9Q89Mr2O+P8MZRffQZvDDWDgKY8g2cpU7Fc4hafoSkNRO6KkW075a
-            fWCyudusDCS1jEps4qJIBj9X+0a5Ikdpf6prrft9Bi/oVTqWptEpoXt0l1YButpOM7WpmkK3KzbXXNKP
-            rnBGmQFv8ZU43ymvIacosWEhHA05ZA0s54vhULDM2vk0mKlHnOWBkHxMGOKbJd7ybpN6X031DlRsWpd+
-            2hEDiuME+B0b4HDwPJwzs6HIf8Z47B+geGnHlUaxQa51gVFleGC9UQ2/OUtgeLABEs3FcIN714wll+VS
-            2Y+j2TyWx7JYKstgc9lCNpU9wgUIGECRzWAzrfwHbIqlZrGJrBu3oB1H4lqMoI2NZylsskUnW3ESE1kf
-            5sMqbMDz2IZ9mN3i6ZY/06rwsHdYX/YfPsO/sAUNvI39rdx0lss+tLraLOdzjGJvsOuo4K/4O97BwSyZ
-            pVlOzmIdeAM7sSc7icewAqvxLIbxKUazXuyhpS5iE16yfAW4CouwBNfgJ5iLn2IpfoflWGZN/C3G4zic
-            g9PxLWyW0qUYKV+KSB5cYlXOwNHYy+Lj8U2skBRPuWi468R2T4OUiJmIGGPx91DAJum+p1qscv0Aja5f
-            xB6SLE3AbJyGMh7At9EpPRTz3WsFCiVCgfuFmCy5sA5v4USmSAmeYnesq0jIEeYL3UKRO8nTIeWxJnGY
-            uMH1D3TTddafTIJZLrfYJZa5Xa79tFSP1cZpC7mIUOv+H2QqFVA=''')
+        with self.subTest('solution'):
+            self.assertAlmostEqual64(sol['u'], '''
+                eNoN0Y9PVVUcAPByScp0hRuKzg3iAu/ee875fh8KypBaWy0UlAxxiErONIM5NqWGlZCVbeAPUGEpLTZk
+                yOavB6KCG+ic6MzBffeec+59970HvFdiG8X8FWmkY5n/wudz2vzDzJMnUvOglzyDN51LUO2cBl9SJxSQ
+                53CTToLq2UCzA5aVS3/zr+DlxvcZN8zj3jTJtCJodBbgCacbzjsH4c7oKcgnsTiLLsRXqZdkE5W3iG3W
+                Wj6trxF3oUoc4s1e1yr1Ntht5Ah0ycdwU+6HKTsVkkNlcIv8Cq+xeGxlDo2lB8RZweUymast0WqDKep3
+                7n532H6P1LAv5BSsFh3QIVrYAbmFRtwiFqG1EAev40Goh5VQTCgtTmvQK4a3jHyT+tPwMe3P8IfsiRyD
+                EqHgC06gUAyQzfakNjO0h8yhD1gpvIVXgWExpEMT7SefhSuVhOT20cfKDLbX0wlrnFL8R8RhnfDoV91V
+                8it4xb6o/ygnxGx9TE3APGjGIFuAW8nX7GGwIfpR9EHS4kgri0/zYGGgBTPtFfCX3c1VOGSuS99lfc7O
+                m/+aP/PnYgP8TRw8QyuwSL/HKsO+hdeTliduUnpYZehdfF89iSHtChtXd1jHnRdGHR83RjDL8pEou+BG
+                scrdh1mhp2ye6kvcGemNTI/sYLeDT2E76cIB1gbLGeGjvN5/zs/9n9Ayf+WSaSsHLeiWE6jIZVjntLNy
+                NSWar2SkbE19mzwK9jGNlWEW9mMVbiK79HhxhC8Wc7X7vBFrSFNgHCt4O/r4fLgg+8hY2lFl+0hh+I3Q
+                M8fQPg4U6DHQCAMYwBw8g9nsMBsiPeESli8/xUw+iTN4NcwS3e4HzjGn3c0aTvZcIzGsgG4UP1iDZoz4
+                nX/58m83/gdDkAP5sDL0EI6KVpR8HNaKVcKCektJ38jmwk49xnGN6sEUf49hm7nWorA3HIslbA+W02o8
+                GWx6ab4a18mI3uyGzLPeBP/6pfeMw5kzh/KMeZYipmSvNh8trQsD2rfYFryB150i3Bvos58E4iwDJgb7
+                l142O9PRPmVn4D67A3/RazAxeBk9zja8S95xFrE7Zq35P+k4iP8=''')
+            self.assertAlmostEqual64(sol['p'], '''
+                eNoNjj1I1XEUhilEo6XBMLAMRCpJ+H/9/r/nTUTMMMvM1MrIr3KwLXFoSLgqLSG06qA0CKFLgwg5BHWD
+                IoKGvJgUFNwoIiINRIOiuEpnOi/neZ/DeUet+tSvizqnC+rRgFr0i+uEvMepU5dsf1pnLXWpUQXuUU0l
+                I+SpUoPOqNlos80mOZXoDXMs8ZxPlKjaeJv5HdZIdVh7tM1fvvGRVX6wz3bt6tUVu1pl5j+KVarP5HjG
+                a35yQHVqNbPG2Bpf2GK3HvGQWeZ5ygd+s1dF2rT0kiyvzBviFhnGuM1NehlmgimmmbSP73KEeq7SzkFe
+                +DZf5gd93qfcsGYntRQZb2A/sz6XTrvVZNF9T5f8MTqAMuOniMj6jXTezcUPwifxY7fLL/uTXOY8y9yn
+                guN+0w0mI1EQjkVDyY6r8zGLfKVROX80HU3K40zUHV2LClEmOZGu+X5l3SF3J14PC8F40Bo0hV1x4v64
+                ySSOZ4KJt+Ur9SsDNfloIfkP0RKMQw==''')
