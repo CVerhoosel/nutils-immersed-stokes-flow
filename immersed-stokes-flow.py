@@ -106,7 +106,7 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
         ghost_mesh = skeleton_mesh.compress([any(get_ref(ambient_domain, tr) != get_ref(domain, tr) for tr in neighbours)
             for neighbours in zip(skeleton_mesh.transforms, skeleton_mesh.opposites)])
 
-        domain_porosity = domain.integrate(function.J(geom), ischeme='uniform1')/numpy.prod(L)
+        domain_porosity = domain.integrate(function.J(geom), degree=1)/numpy.prod(L)
         treelog.user(f'porosity: {domain_porosity:5.4f}')
 
         # Plot the meshes
