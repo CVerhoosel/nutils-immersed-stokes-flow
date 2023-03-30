@@ -95,12 +95,22 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
 
         # Trim the domain
         domain = ambient_domain.trim(levelset, maxrefine=maxrefine)
-        background_mesh, skeleton_mesh, ghost_mesh = construct_meshes(ambient_domain, domain)
+
+        # Construct the skeleton mesh: interfaces of the ambient domain that
+        # border two non-empty elements in the trimmed domain
+        skeleton_mesh = ambient_domain.interfaces.compress([all(domain.transforms.contains_with_tail(tr) for tr in neighbours)
+            for neighbours in zip(ambient_domain.interfaces.transforms, ambient_domain.interfaces.opposites)])
+
+        # Construct the ghost mesh: elements of the skeleton mesh that border
+        # at least one trimmed element
+        ghost_mesh = skeleton_mesh.compress([any(get_ref(ambient_domain, tr) != get_ref(domain, tr) for tr in neighbours)
+            for neighbours in zip(skeleton_mesh.transforms, skeleton_mesh.opposites)])
 
         domain_porosity = domain.integrate(function.J(geom), ischeme='uniform1')/numpy.prod(L)
         treelog.user(f'porosity: {domain_porosity:5.4f}')
 
         # Plot the meshes
+        background_mesh = topology.SubsetTopology(ambient_domain, [ref if domain.transforms.contains_with_tail(tr) else ref.empty for tr, ref in zip(ambient_domain.transforms,ambient_domain.references)])
         pp.meshes(domain, background_mesh, skeleton_mesh, ghost_mesh)
 
     # Solving the Stokes problem using immersed isogeometric analysis
@@ -184,42 +194,10 @@ def get_levelset(L, R, geom, seed):
 
     return levelset
 
-def construct_meshes(ambient_domain, domain):
-
-    # Extract the background mesh
-    background_mesh = topology.SubsetTopology(ambient_domain, [ref  if domain.transforms.contains_with_tail(tr) else  ref.empty for tr, ref in zip(ambient_domain.transforms,ambient_domain.references)])
-
-    # Get the skeleton mesh
-    skeleton_mesh = background_mesh.interfaces
-
-    # Get the ghost mesh
-    ghost_references = []
-    ghost_transforms = []
-    ghost_opposites  = []
-    for skeleton_tr, skeleton_ref, skeleton_opp in zip(skeleton_mesh.transforms, skeleton_mesh.references, skeleton_mesh.opposites):
-      for tr in skeleton_tr, skeleton_opp:
-
-        # Find the corresponding element in the background mesh
-        background_index = background_mesh.transforms.index_with_tail(tr)[0]
-
-        # Find the corresponding element in the trimmed mesh
-        index = domain.transforms.index_with_tail(tr)[0]
-
-        # Mark as a ghost interface if the corresponding element was trimmed
-        if background_mesh.references[background_index]!=domain.references[index]:
-            assert background_mesh.transforms[background_index]==domain.transforms[index]
-            assert background_mesh.opposites[background_index] ==domain.opposites[index]
-            ghost_references.append(skeleton_ref)
-            ghost_transforms.append(skeleton_tr)
-            ghost_opposites.append(skeleton_opp)
-            break
-
-    ghost_references = elementseq.References.from_iter(ghost_references, skeleton_mesh.ndims)
-    ghost_opposites  = transformseq.PlainTransforms(ghost_opposites, todims=background_mesh.ndims, fromdims=skeleton_mesh.ndims)
-    ghost_transforms = transformseq.PlainTransforms(ghost_transforms, todims=background_mesh.ndims, fromdims=skeleton_mesh.ndims)
-    ghost_mesh = topology.TransformChainsTopology('X', ghost_references, ghost_transforms, ghost_opposites)
-
-    return background_mesh, skeleton_mesh, ghost_mesh
+def get_ref(topo, trans):
+    'return element in topo at the position of trans'
+    index, tail = topo.transforms.index_with_tail(trans)
+    return topo.references[index]
 
 def dnΔ(f, x, n, count=1):
     'construct the count-times normal gradient of the jump of f'
