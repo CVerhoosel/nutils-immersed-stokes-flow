@@ -110,8 +110,7 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
         treelog.user(f'porosity: {domain_porosity:5.4f}')
 
         # Plot the meshes
-        background_mesh = topology.SubsetTopology(ambient_domain, [ref if domain.transforms.contains_with_tail(tr) else ref.empty for tr, ref in zip(ambient_domain.transforms,ambient_domain.references)])
-        pp.meshes(domain, background_mesh, skeleton_mesh, ghost_mesh)
+        pp.meshes(domain, skeleton_mesh, ghost_mesh)
 
     # Solving the Stokes problem using immersed isogeometric analysis
     with treelog.context('immersed iga solver'):
