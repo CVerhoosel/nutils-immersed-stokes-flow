@@ -22,7 +22,8 @@
 # background mesh, and a ghost-stabilization term for the velocity acting on
 # the ghost mesh.
 
-from nutils import cli, mesh, function, topology, solver, elementseq, transformseq, testing
+from nutils import cli, mesh, function, solver, testing
+from nutils.expression_v2 import Namespace
 from typing import Tuple
 import numpy, treelog, numpy.linalg, itertools
 import postprocessing
@@ -94,20 +95,32 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
 
         # Trim the domain
         domain = ambient_domain.trim(levelset, maxrefine=maxrefine)
-        background_mesh, skeleton_mesh, ghost_mesh = construct_meshes(ambient_domain, domain)
 
-        domain_porosity = domain.integrate(function.J(geom), ischeme='uniform1')/numpy.prod(L)
+        # Construct the skeleton mesh: interfaces of the ambient domain that
+        # border two non-empty elements in the trimmed domain
+        skeleton_mesh = ambient_domain.interfaces.compress([all(domain.transforms.contains_with_tail(tr) for tr in neighbours)
+            for neighbours in zip(ambient_domain.interfaces.transforms, ambient_domain.interfaces.opposites)])
+
+        # Construct the ghost mesh: elements of the skeleton mesh that border
+        # at least one trimmed element
+        ghost_mesh = skeleton_mesh.compress([any(get_ref(ambient_domain, tr) != get_ref(domain, tr) for tr in neighbours)
+            for neighbours in zip(skeleton_mesh.transforms, skeleton_mesh.opposites)])
+
+        domain_porosity = domain.integrate(function.J(geom), degree=1)/numpy.prod(L)
         treelog.user(f'porosity: {domain_porosity:5.4f}')
 
         # Plot the meshes
-        pp.meshes(domain, background_mesh, skeleton_mesh, ghost_mesh)
+        pp.meshes(domain, skeleton_mesh, ghost_mesh)
 
     # Solving the Stokes problem using immersed isogeometric analysis
     with treelog.context('immersed iga solver'):
 
         # Namespace initialization
-        ns = function.Namespace()
-        ns.x    = geom
+        ns = Namespace()
+        ns.δ = function.eye(domain.ndims)
+        ns.x = geom
+        ns.define_for('x', gradient='∇', normal='n', jacobians=('dV', 'dS'))
+
         ns.μ    = mu
         ns.h    = numpy.linalg.norm(numpy.array(L)/numpy.array(nelems))
         ns.β    = beta
@@ -119,52 +132,52 @@ def stokes_flow(L:Tuple[float,...], R:Tuple[float,float], mu:float, beta:float, 
         ns.ubasis = domain.basis('spline', degree=degree).vector(domain.ndims)
         ns.pbasis = domain.basis('spline', degree=degree)
 
-        ns.Δubasis = function.jump(ns.ubasis)
-        ns.Δpbasis = function.jump(ns.pbasis)
+        ns.dnΔubasis = dnΔ(ns.ubasis, ns.x, 'n_i h' @ ns, count=degree)
+        ns.dnΔpbasis = dnΔ(ns.pbasis, ns.x, 'n_i h' @ ns, count=degree)
 
         # Velocity and pressure fields
-        ns.u_i = 'ubasis_ni ?lhsu_n'
-        ns.p   = 'pbasis_n ?lhsp_n'
+        ns.u = function.dotarg('u', ns.ubasis)
+        ns.p = function.dotarg('p', ns.pbasis)
+        ns.σ_ij = 'μ (∇_j(u_i) + ∇_i(u_j)) - δ_ij p'
 
-        ns.Δu_i = 'Δubasis_ni ?lhsu_n'
-        ns.Δp   = 'Δpbasis_n ?lhsp_n'
+        ns.dnΔu = dnΔ(ns.u, ns.x, 'n_i h' @ ns, count=degree)
+        ns.dnΔp = dnΔ(ns.p, ns.x, 'n_i h' @ ns, count=degree)
 
         # Residual volume terms
-        resu = domain.integral('(μ ubasis_ni,j (u_i,j + u_j,i) - ubasis_nk,k p) d:x'@ns, degree=2*degree)
-        resp = domain.integral('-u_k,k pbasis_n d:x'@ns, degree=2*degree)
+        resu = domain.integral('∇_j(ubasis_ni) σ_ij dV' @ ns, degree=2*degree)
+        resp = domain.integral('-∇_k(u_k) pbasis_n dV' @ ns, degree=2*degree)
 
         # Dirichlet boundary terms
         dirichlet_boundary = domain.boundary['trimmed,top,bottom' if domain.ndims==2 else 'trimmed,top,bottom,front,back']
-        resu += dirichlet_boundary.integral('(-μ ((u_i,j + u_j,i) n_i ubasis_nj + (ubasis_ni,j + ubasis_nj,i) n_i u_j) + μ (β / h) ubasis_ni u_i + p ubasis_ni n_i) d:x'@ns, degree=2*degree)
-        resp += dirichlet_boundary.integral('pbasis_n u_i n_i d:x'@ns, degree=2*degree)
+        resu += dirichlet_boundary.integral('-σ_ij n_i ubasis_nj dS' @ ns, degree=2*degree)
+        resu += dirichlet_boundary.integral('-μ ((∇_j(ubasis_ni) + ∇_i(ubasis_nj)) n_j - (β / h) ubasis_ni) u_i dS' @ ns, degree=2*degree)
+        resp += dirichlet_boundary.integral('pbasis_n u_i n_i dS' @ ns, degree=2*degree)
 
         # Inflow boundary term
-        resu += domain.boundary['left'].integral('pbar n_i ubasis_ni d:x'@ns, degree=2*degree)
+        resu += domain.boundary['left'].integral('pbar n_i ubasis_ni dS' @ ns, degree=2*degree)
 
         # Skeleton stabilization term
-        from string import ascii_lowercase as alphabet
-        dn = lambda function, start, stop: f'{function},{alphabet[start:stop]} {" ".join([f"n_{index}" for index in alphabet[start:stop]])}'
-        resp += skeleton_mesh.integral((f'-γs h^{2*degree+1} {dn("Δpbasis_n", 0, degree)} {dn("Δp_", degree, 2*degree)} d:x')@ns, degree=2*degree)
+        resp += skeleton_mesh.integral(f'-γs h dnΔpbasis_n dnΔp dS' @ ns, degree=2*degree)
 
         # Ghost stabilization term
-        resu += ghost_mesh.integral((f'γg h^{2*degree-1} {dn("Δubasis_ni", 0, degree)} {dn("Δu_i", degree, 2*degree)} d:x')@ns, degree=2*degree)
+        resu += ghost_mesh.integral('(γg / h) dnΔubasis_ni dnΔu_i dS' @ ns, degree=2*degree)
 
         # Solve the linear system
-        sol = solver.solve_linear(('lhsu', 'lhsp'), (resu, resp))
+        sol = solver.solve_linear(('u', 'p'), (resu, resp))
 
     # Post-processing of results
     with treelog.context('post-processing'):
         pp.solution(domain, ns, sol)
 
     # Compute the averaged in- and outflow
-    Ain , Qin , pin  = domain.boundary['left'] .integrate(['d:x', '-u_i n_i d:x', 'p d:x']@ns, degree=degree, arguments=sol)
-    Aout, Qout, pout = domain.boundary['right'].integrate(['d:x', 'u_i n_i d:x' , 'p d:x']@ns, degree=degree+1, arguments=sol)
+    Ain , Qin , pin  = domain.boundary['left'] .integrate(['dS', '-u_i n_i dS', 'p dS']@ns, degree=degree, arguments=sol)
+    Aout, Qout, pout = domain.boundary['right'].integrate(['dS', 'u_i n_i dS' , 'p dS']@ns, degree=degree+1, arguments=sol)
     treelog.user(f'(in/out)flow area    : {Ain} / {Aout}')
     treelog.user(f'(in/out)flow pressure: {pin/Ain} / {pout/Aout}')
     treelog.user(f'(in/out)flow flux    : {Qin} / {Qout}')
     treelog.user(f'(in/out)flow velocity: {Qin/Ain} / {Qout/Aout}')
 
-    return domain_porosity, numpy.concatenate([sol['lhsu'],sol['lhsp']]), Qout
+    return domain_porosity, sol, Qout
 
 def get_levelset(L, R, geom, seed):
 
@@ -180,42 +193,19 @@ def get_levelset(L, R, geom, seed):
 
     return levelset
 
-def construct_meshes(ambient_domain, domain):
+def get_ref(topo, trans):
+    'return element in topo at the position of trans'
+    index, tail = topo.transforms.index_with_tail(trans)
+    return topo.references[index]
 
-    # Extract the background mesh
-    background_mesh = topology.SubsetTopology(ambient_domain, [ref  if domain.transforms.contains_with_tail(tr) else  ref.empty for tr, ref in zip(ambient_domain.transforms,ambient_domain.references)])
-
-    # Get the skeleton mesh
-    skeleton_mesh = background_mesh.interfaces
-
-    # Get the ghost mesh
-    ghost_references = []
-    ghost_transforms = []
-    ghost_opposites  = []
-    for skeleton_tr, skeleton_ref, skeleton_opp in zip(skeleton_mesh.transforms, skeleton_mesh.references, skeleton_mesh.opposites):
-      for tr in skeleton_tr, skeleton_opp:
-
-        # Find the corresponding element in the background mesh
-        background_index = background_mesh.transforms.index_with_tail(tr)[0]
-
-        # Find the corresponding element in the trimmed mesh
-        index = domain.transforms.index_with_tail(tr)[0]
-
-        # Mark as a ghost interface if the corresponding element was trimmed
-        if background_mesh.references[background_index]!=domain.references[index]:
-            assert background_mesh.transforms[background_index]==domain.transforms[index]
-            assert background_mesh.opposites[background_index] ==domain.opposites[index]
-            ghost_references.append(skeleton_ref)
-            ghost_transforms.append(skeleton_tr)
-            ghost_opposites.append(skeleton_opp)
-            break
-
-    ghost_references = elementseq.References.from_iter(ghost_references, skeleton_mesh.ndims)
-    ghost_opposites  = transformseq.PlainTransforms(ghost_opposites, todims=background_mesh.ndims, fromdims=skeleton_mesh.ndims)
-    ghost_transforms = transformseq.PlainTransforms(ghost_transforms, todims=background_mesh.ndims, fromdims=skeleton_mesh.ndims)
-    ghost_mesh = topology.TransformChainsTopology('X', ghost_references, ghost_transforms, ghost_opposites)
-
-    return background_mesh, skeleton_mesh, ghost_mesh
+def dnΔ(f, x, n, count=1):
+    'construct the count-times normal gradient of the jump of f'
+    f = function.jump(f)
+    for i in range(count):
+        f = function.grad(f, x)
+    for i in range(count):
+        f @= n
+    return f
 
 if __name__ == '__main__':
     cli.run(stokes_flow)
@@ -223,37 +213,38 @@ if __name__ == '__main__':
 # Unit testing
 class test(testing.TestCase):
 
-  def test_2D(self):
-    porosity, lhs, outflow = stokes_flow(L=(2.5,2.5), R=(0.4,0.7), mu=1., beta=100.,
-                                         gammaskeleton=0.05, gammaghost=0.0005, pbar=1.,
-                                         nelems=(12,12), degree=3, maxrefine=2, seed=123456, plotting='none')
+    def test_2D(self):
+        porosity, sol, outflow = stokes_flow(L=(2.5,2.5), R=(0.4,0.7), mu=1.,
+            beta=100., gammaskeleton=0.05, gammaghost=0.0005, pbar=1.,
+            nelems=(12,12), degree=3, maxrefine=2, seed=123456, plotting='none')
 
-    # Porosity
-    with self.subTest('porosity'): self.assertAlmostEqual(porosity, 0.6540391378932529, places=10)
+        with self.subTest('porosity'):
+            self.assertAlmostEqual(porosity, 0.65403913789, places=10)
 
-    # Flux
-    with self.subTest('outflow'): self.assertAlmostEqual(outflow, 0.01748244952959246, places=10)
+        with self.subTest('outflow'):
+            self.assertAlmostEqual(outflow, 0.01748244953, places=10)
 
-    # Solution vector
-    with self.subTest('lhs'):
-        self.assertAlmostEqual64(lhs,
-         '''eNoNkntQVHUUx9NRNCbHtEQly8fy2N17f79zd+/e80PR1DJREETEFBEfiaZjTIaNWoBa1uD7RSmOzqAB
-            M2qCkGiNSI7omOnufe8LXPJRQ5JPfJAOafev853zOd8zZ845R+S/5VR9X3wqPc09o6+bJ2mxeYTWjKil
-            GdxzeoHvpPbEOfwYv6Kk8Nd9yepy79ee8/JeIUEnjmy6xxwM+8x6etzcQi9fq6JpXDT05YdCD17gxnB2
-            9aC2WMlUu53p2g26WtuqlgsBJU/YYRzmdtIT+gN6Qd9Iu4x4Oiq0jF7k/qC9yCCoICYfzW/WjmmqjnqK
-            w+0oDcbZvwpsDLQY73Ml5HO9i07Tqmm1dpBs1hfwkUA2ifCldADtA1vodjqFzuZ4fnbCDmdBy4LWdfH7
-            W3Y7boenk8f6TZqj2eClytEsrZmbZ3Q6eofWcK/xd0keHQlnKYHZ1EXL+Ebu43ChbcioymsPbD1JUWIt
-            TTfz4Kk2ADZpic6zgan6F/QV4yfn93qH9qrzpn0IpNJyCJLBsIj7ktwL7mib0XZ3xLBIBRmUkAhZ/oMg
-            Gcn0oVGv2ulWeaZrpbKKHJf/lQ+oz7U59BFnwlG+ALKdt0hhuGbouRFseK7tFCkMTYBJ9kMQcvxM2u1L
-            lb3mS+8mtd3bCklKDddG6gJtsDqwHpJCT8hAe83wFZHTke7WpeRS8AnN505AMzlMGeHUa+p2348+1fcR
-            v8xX6O5WxoJC6/UOsOkIm8xKstwe15Zm88Qtih/H3Q+eIQ6yDJKgEVZDLrfSOUjbqQ7T+jnuqHughCvz
-            t0OBWgk1agyt089wNxN22fJbs8L9Q89Mr2O+P8MZRffQZvDDWDgKY8g2cpU7Fc4hafoSkNRO6KkW075a
-            fWCyudusDCS1jEps4qJIBj9X+0a5Ikdpf6prrft9Bi/oVTqWptEpoXt0l1YButpOM7WpmkK3KzbXXNKP
-            rnBGmQFv8ZU43ymvIacosWEhHA05ZA0s54vhULDM2vk0mKlHnOWBkHxMGOKbJd7ybpN6X031DlRsWpd+
-            2hEDiuME+B0b4HDwPJwzs6HIf8Z47B+geGnHlUaxQa51gVFleGC9UQ2/OUtgeLABEs3FcIN714wll+VS
-            2Y+j2TyWx7JYKstgc9lCNpU9wgUIGECRzWAzrfwHbIqlZrGJrBu3oB1H4lqMoI2NZylsskUnW3ESE1kf
-            5sMqbMDz2IZ9mN3i6ZY/06rwsHdYX/YfPsO/sAUNvI39rdx0lss+tLraLOdzjGJvsOuo4K/4O97BwSyZ
-            pVlOzmIdeAM7sSc7icewAqvxLIbxKUazXuyhpS5iE16yfAW4CouwBNfgJ5iLn2IpfoflWGZN/C3G4zic
-            g9PxLWyW0qUYKV+KSB5cYlXOwNHYy+Lj8U2skBRPuWi468R2T4OUiJmIGGPx91DAJum+p1qscv0Aja5f
-            xB6SLE3AbJyGMh7At9EpPRTz3WsFCiVCgfuFmCy5sA5v4USmSAmeYnesq0jIEeYL3UKRO8nTIeWxJnGY
-            uMH1D3TTddafTIJZLrfYJZa5Xa79tFSP1cZpC7mIUOv+H2QqFVA=''')
+        with self.subTest('solution'):
+            self.assertAlmostEqual64(sol['u'], '''
+                eNoN0Y9PVVUcAPByScp0hRuKzg3iAu/ee875fh8KypBaWy0UlAxxiErONIM5NqWGlZCVbeAPUGEpLTZk
+                yOavB6KCG+ic6MzBffeec+59970HvFdiG8X8FWmkY5n/wudz2vzDzJMnUvOglzyDN51LUO2cBl9SJxSQ
+                53CTToLq2UCzA5aVS3/zr+DlxvcZN8zj3jTJtCJodBbgCacbzjsH4c7oKcgnsTiLLsRXqZdkE5W3iG3W
+                Wj6trxF3oUoc4s1e1yr1Ntht5Ah0ycdwU+6HKTsVkkNlcIv8Cq+xeGxlDo2lB8RZweUymast0WqDKep3
+                7n532H6P1LAv5BSsFh3QIVrYAbmFRtwiFqG1EAev40Goh5VQTCgtTmvQK4a3jHyT+tPwMe3P8IfsiRyD
+                EqHgC06gUAyQzfakNjO0h8yhD1gpvIVXgWExpEMT7SefhSuVhOT20cfKDLbX0wlrnFL8R8RhnfDoV91V
+                8it4xb6o/ygnxGx9TE3APGjGIFuAW8nX7GGwIfpR9EHS4kgri0/zYGGgBTPtFfCX3c1VOGSuS99lfc7O
+                m/+aP/PnYgP8TRw8QyuwSL/HKsO+hdeTliduUnpYZehdfF89iSHtChtXd1jHnRdGHR83RjDL8pEou+BG
+                scrdh1mhp2ye6kvcGemNTI/sYLeDT2E76cIB1gbLGeGjvN5/zs/9n9Ayf+WSaSsHLeiWE6jIZVjntLNy
+                NSWar2SkbE19mzwK9jGNlWEW9mMVbiK79HhxhC8Wc7X7vBFrSFNgHCt4O/r4fLgg+8hY2lFl+0hh+I3Q
+                M8fQPg4U6DHQCAMYwBw8g9nsMBsiPeESli8/xUw+iTN4NcwS3e4HzjGn3c0aTvZcIzGsgG4UP1iDZoz4
+                nX/58m83/gdDkAP5sDL0EI6KVpR8HNaKVcKCektJ38jmwk49xnGN6sEUf49hm7nWorA3HIslbA+W02o8
+                GWx6ab4a18mI3uyGzLPeBP/6pfeMw5kzh/KMeZYipmSvNh8trQsD2rfYFryB150i3Bvos58E4iwDJgb7
+                l142O9PRPmVn4D67A3/RazAxeBk9zja8S95xFrE7Zq35P+k4iP8=''')
+            self.assertAlmostEqual64(sol['p'], '''
+                eNoNjj1I1XEUhilEo6XBMLAMRCpJ+H/9/r/nTUTMMMvM1MrIr3KwLXFoSLgqLSG06qA0CKFLgwg5BHWD
+                IoKGvJgUFNwoIiINRIOiuEpnOi/neZ/DeUet+tSvizqnC+rRgFr0i+uEvMepU5dsf1pnLXWpUQXuUU0l
+                I+SpUoPOqNlos80mOZXoDXMs8ZxPlKjaeJv5HdZIdVh7tM1fvvGRVX6wz3bt6tUVu1pl5j+KVarP5HjG
+                a35yQHVqNbPG2Bpf2GK3HvGQWeZ5ygd+s1dF2rT0kiyvzBviFhnGuM1NehlmgimmmbSP73KEeq7SzkFe
+                +DZf5gd93qfcsGYntRQZb2A/sz6XTrvVZNF9T5f8MTqAMuOniMj6jXTezcUPwifxY7fLL/uTXOY8y9yn
+                guN+0w0mI1EQjkVDyY6r8zGLfKVROX80HU3K40zUHV2LClEmOZGu+X5l3SF3J14PC8F40Bo0hV1x4v64
+                ySSOZ4KJt+Ur9SsDNfloIfkP0RKMQw==''')

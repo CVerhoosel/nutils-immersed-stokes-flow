@@ -1,8 +1,8 @@
 # Post-processing class accompanying `immersed-stokes-flow.py`
 
 from nutils import export
-import numpy, itertools
-from matplotlib import collections, patches, colors, colormaps, cm
+import numpy
+from matplotlib import collections, colors
 
 # Initialize the post-processor
 def initialize(plotting, ndims, *args):
@@ -23,7 +23,7 @@ class PostProcessor:
         self.lengths   = lengths
         self.geom      = geom
 
-    def meshes(self, domain, background_mesh, skeleton_mesh, ghost_mesh):
+    def meshes(self, domain, skeleton_mesh, ghost_mesh):
         pass
 
     def solution(self, domain, ns, sol):
@@ -32,17 +32,14 @@ class PostProcessor:
 # Matplotlib plotting for 2D cases
 class MatplotlibPlotter(PostProcessor):
 
-    def meshes(self, domain, background_mesh, skeleton_mesh, ghost_mesh):
+    def meshes(self, domain, skeleton_mesh, ghost_mesh):
 
         bezier = domain.sample('bezier', 2**self.maxrefine+1)
         points = bezier.eval(self.geom)
-        bbezier = background_mesh.sample('bezier', 2)
-        bpoints = bbezier.eval(self.geom)
         with export.mplfigure('immersed_domain.png') as fig:
-            ax = fig.add_subplot(111, aspect='equal', title='domain immersed in background mesh')
+            ax = fig.add_subplot(111, aspect='equal', title='domain')
             ax.autoscale(enable=True, axis='both', tight=True)
             im = ax.tripcolor(points[:,0], points[:,1], bezier.tri, numpy.zeros(points.shape[0]), shading='gouraud', cmap='binary')
-            ax.add_collection(collections.LineCollection(bpoints[bbezier.hull], colors='k', linewidth=1, alpha=1))
             fig.colorbar(im).remove()
 
         sbezier = skeleton_mesh.sample('bezier', 2)
@@ -51,7 +48,6 @@ class MatplotlibPlotter(PostProcessor):
             ax = fig.add_subplot(111, aspect='equal', title='skeleton mesh')
             ax.autoscale(enable=True, axis='both', tight=True)
             im = ax.tripcolor(points[:,0], points[:,1], bezier.tri, numpy.zeros(points.shape[0]), shading='gouraud', cmap='binary')
-            ax.add_collection(collections.LineCollection(bpoints[bbezier.hull], colors='k', linewidth=1, alpha=0.1))
             ax.add_collection(collections.LineCollection(spoints, colors='k', linewidth=1, alpha=1))
             fig.colorbar(im).remove()
 
@@ -61,7 +57,6 @@ class MatplotlibPlotter(PostProcessor):
             ax = fig.add_subplot(111, aspect='equal', title='ghost mesh')
             ax.autoscale(enable=True, axis='both', tight=True)
             im = ax.tripcolor(points[:,0], points[:,1], bezier.tri, numpy.zeros(points.shape[0]), shading='gouraud', cmap='binary')
-            ax.add_collection(collections.LineCollection(bpoints[bbezier.hull], colors='k', linewidth=1, alpha=0.1))
             ax.add_collection(collections.LineCollection(gpoints, colors='k', linewidth=1, alpha=1))
             fig.colorbar(im).remove()
 
